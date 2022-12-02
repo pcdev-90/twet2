@@ -1,76 +1,81 @@
-const http = require('http')
-const path = require('path')
-const express = require('express')
-const socketIo = require('socket.io')
-const needle = require('needle')
-const config = require('dotenv').config()
-const TOKEN = process.env.TWITTER_BEARER_TOKEN
-const PORT = process.env.PORT || 3000
+const http = require("http");
+const path = require("path");
+const express = require("express");
+const socketIo = require("socket.io");
+const needle = require("needle");
+const config = require("dotenv").config();
+const TOKEN = process.env.TWITTER_BEARER_TOKEN;
+const PORT = process.env.PORT || 3000;
 
-const app = express()
+const app = express();
 
-const server = http.createServer(app)
-const io = socketIo(server)
+const server = http.createServer(app);
+const io = socketIo(server);
 
-app.get('/', (req, res) => {
-  res.sendFile(path.resolve(__dirname, '../', 'client', 'index.html'))
-})
+app.get("/", (req, res) => {
+  res.sendFile(path.resolve(__dirname, "../", "client", "index.html"));
+});
 
-const rulesURL = 'https://api.twitter.com/2/tweets/search/stream/rules'
+const rulesURL = "https://api.twitter.com/2/tweets/search/stream/rules";
 const streamURL =
-  'https://api.twitter.com/2/tweets/search/stream?tweet.fields=public_metrics&expansions=author_id'
+  "https://api.twitter.com/2/tweets/search/stream?tweet.fields=public_metrics&expansions=author_id";
 
-const rules = [{ value: 'giveaway' }]
+const rules = [
+  {
+    value:
+      "(from:WatcherGuru OR from:MinchilloLucas OR from:CoinDesk OR from:DylainLeClair_ OR from:caprioleio OR from:AlertsSatoshi OR from:miledeutscher OR from:WhaleChart OR from:hodlKRYPTONITE OR from:zerohedge OR from:Onchain_edge OR from:TheBlock_ OR from:Dogetoshi OR from:BTC_Archieve OR from:Ashcryptoreal OR from:MarioNawfal OR from:FTX_Official OR from:glassnodealerts OR from:BitcoinMagazine OR from:CryptoHayes OR from:AutismCapital OR from:cryptoquant_com OR from:lookonchain)",
+  },
+];
 
 // Get stream rules
 async function getRules() {
-  const response = await needle('get', rulesURL, {
+  const response = await needle("get", rulesURL, {
     headers: {
       Authorization: `Bearer ${TOKEN}`,
     },
-  })
-  console.log(response.body)
-  return response.body
+  });
+  console.log(response.body);
+  return response.body;
 }
 
 // Set stream rules
 async function setRules() {
   const data = {
     add: rules,
-  }
+  };
 
-  const response = await needle('post', rulesURL, data, {
+  const response = await needle("post", rulesURL, data, {
     headers: {
-      'content-type': 'application/json',
+      "content-type": "application/json",
       Authorization: `Bearer ${TOKEN}`,
     },
-  })
+  });
 
-  return response.body
+  return response.body;
 }
 
 // Delete stream rules
 async function deleteRules(rules) {
   if (!Array.isArray(rules.data)) {
-    return null
+    return null;
   }
 
-  const ids = rules.data.map((rule) => rule.id)
+  const ids = rules.data.map((rule) => rule.id);
 
   const data = {
     delete: {
       ids: ids,
     },
-  }
+  };
 
-  const response = await needle('post', rulesURL, data, {
+  const response = await needle("post", rulesURL, data, {
     headers: {
-      'content-type': 'application/json',
+      "content-type": "application/json",
       Authorization: `Bearer ${TOKEN}`,
     },
-  })
+  });
 
-  return response.body
+  return response.body;
 }
 
 function streamTweets(socket) {
@@ -78,50 +83,50 @@ function streamTweets(socket) {
     headers: {
       Authorization: `Bearer ${TOKEN}`,
     },
-  })
+  });
 
-  stream.on('data', (data) => {
+  stream.on("data", (data) => {
     try {
-      const json = JSON.parse(data)
-      console.log(json)
-      socket.emit('tweet', json)
+      const json = JSON.parse(data);
+      console.log(json);
+      socket.emit("tweet", json);
     } catch (error) {}
-  })
+  });
 
-  return stream
+  return stream;
 }
 
-io.on('connection', async () => {
-  console.log('Client connected...')
+io.on("connection", async () => {
+  console.log("Client connected...");
 
-  let currentRules
+  let currentRules;
 
   try {
     //   Get all stream rules
-    currentRules = await getRules()
+    currentRules = await getRules();
 
     // Delete all stream rules
-    await deleteRules(currentRules)
+    await deleteRules(currentRules);
 
     // Set rules based on array above
-    await setRules()
+    await setRules();
   } catch (error) {
-    console.error(error)
-    process.exit(1)
+    console.error(error);
+    process.exit(1);
   }
 
-  const filteredStream = streamTweets(io)
+  const filteredStream = streamTweets(io);
 
-  let timeout = 0
-  filteredStream.on('timeout', () => {
+  let timeout = 0;
+  filteredStream.on("timeout", () => {
     // Reconnect on error
-    console.warn('A connection error occurred. Reconnecting…')
+    console.warn("A connection error occurred. Reconnecting…");
     setTimeout(() => {
-      timeout++
-      streamTweets(io)
-    }, 2 ** timeout)
-    streamTweets(io)
-  })
-})
+      timeout++;
+      streamTweets(io);
+    }, 2 ** timeout);
+    streamTweets(io);
+  });
+});
 
-server.listen(PORT, () => console.log(`Listening on port ${PORT}`))
+server.listen(PORT, () => console.log(`Listening on port ${PORT}`));
